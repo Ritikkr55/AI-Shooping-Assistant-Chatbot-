@@ -1,0 +1,223 @@
+import gradio as gr
+import google.generativeai as genai
+
+# --- Enhanced Custom CSS ---
+custom_css = """
+body {
+    font-family: 'Segoe UI', sans-serif;
+    background: linear-gradient(to right, #e0f7fa, #f1f8e9);
+    color: #1a237e;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 100vh;
+    flex-direction: column;
+}
+
+.container {
+    background-color: #ffffff;
+    padding: 40px;
+    border-radius: 20px;
+    box-shadow: 0 8px 30px rgba(0, 0, 0, 0.12);
+    max-width: 700px;
+    width: 95%;
+}
+
+h1 {
+    color: #1565c0;
+    font-size: 2.2em;
+    margin-bottom: 10px;
+    text-align: center;
+}
+
+#info-header {
+    text-align: center;
+    font-size: 14px;
+    color: #37474f;
+    margin-bottom: 15px;
+}
+
+#chatbot-container {
+    background-color: #e3f2fd;
+    border-radius: 16px;
+    padding: 20px;
+    max-height: 420px;
+    overflow-y: auto;
+    margin-bottom: 20px;
+}
+
+.message {
+    padding: 12px 16px;
+    border-radius: 16px;
+    margin: 4px 0;
+    font-size: 15.5px;
+    line-height: 1.6;
+    max-width: 80%;
+}
+
+.user-message {
+    background-color: #66bb6a;
+    color: white;
+    align-self: flex-end;
+    border-radius: 16px 0 16px 16px;
+}
+
+.assistant-message {
+    background-color: #bbdefb;
+    color: #0d47a1;
+    align-self: flex-start;
+    border-radius: 0 16px 16px 16px;
+}
+
+#chatbot-input-area {
+    display: flex;
+    flex-direction: row;
+    gap: 10px;
+    width: 100%;
+}
+
+#chatbot-input {
+    padding: 8px;
+    border: 1.5px solid #4caf50;
+    background-color: #f0fff0;
+    border-radius: 8px;
+    font-size: 13.5px;
+    flex-grow: 1;
+}
+
+#chatbot-input:focus {
+    outline: none;
+    border-color: #43a047;
+    box-shadow: 0 0 6px rgba(67, 160, 71, 0.3);
+}
+
+#chatbot-send-button, #restart-button {
+    font-size: 11px;
+    padding: 4px 10px;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+#chatbot-send-button {
+    background-color: #1565c0;
+    color: white;
+}
+
+#chatbot-send-button:hover {
+    background-color: #0d47a1;
+}
+
+#restart-button {
+    background-color: #ef5350;
+    color: white;
+    margin-top: 20px;
+}
+
+#restart-button:hover {
+    background-color: #c62828;
+}
+
+@media screen and (max-width: 768px) {
+    .container {
+        padding: 20px;
+    }
+
+    #chatbot-input-area {
+        flex-direction: column;
+    }
+
+    #chatbot-send-button, #restart-button {
+        width: 100%;
+    }
+}
+"""
+
+# --- State Management ---
+conversation_history = []
+
+# --- Helper Functions ---
+def get_product_info(query, genai_model):
+    prompt = f"""
+    You are a shopping assistant. A user is asking about products. Here is their request: {query}
+    Provide concise information. Include product name, price, and image URL if relevant.
+    """
+    try:
+        response = genai_model.generate_content(prompt)
+        return response.text
+    except Exception as e:
+        return f"Error fetching product info: {e}"
+
+# --- Chatbot Logic ---
+def ai_shopping_assistant(history, text_input, state, genai_model):
+    if text_input:
+        history.append({"role": "user", "content": text_input})
+        user_input = text_input.strip()
+
+        if state == 0:
+            response = get_product_info(user_input, genai_model)
+            history.append({"role": "assistant", "content": response})
+            state = 1
+        elif state == 1:
+            try:
+                prompt = f"You are a helpful shopping assistant. Answer this follow-up question: {user_input}"
+                response = genai_model.generate_content(prompt)
+                history.append({"role": "assistant", "content": response.text})
+            except Exception as e:
+                history.append({"role": "assistant", "content": f"Sorry, error: {e}"})
+
+    return history, "", state
+
+def restart_chatbot():
+    return [{"role": "assistant", "content": "👋 Welcome to the AI Shopping Assistant! What are you looking for today?"}], 0
+
+def initial_state():
+    return 0
+
+def setup_genai():
+    try:
+        genai.configure(api_key="AIzaSyBxonFctT-0m4dlXMy2LnDQ3ttyCx9A2UI")
+        model = genai.GenerativeModel('gemini-1.5-pro')
+        return model
+    except Exception as e:
+        print(f"Gemini setup failed: {e}")
+        return None
+
+# --- Interface ---
+with gr.Blocks(css=custom_css) as iface:
+    state = gr.State(initial_state)
+    genai_model = gr.State(setup_genai)
+    with gr.Column(elem_id="container"):
+        gr.HTML("<h1>🛒 AI Shopping Assistant</h1>")
+        gr.HTML("""
+        <div id='info-header'>
+            <b>Developed By:</b><br>
+            Reg No: <b>12309087</b> | Name: <b>Ashish Raj</b> | Section: <b>K23GW</b> | Roll No: <b>41</b><br>
+            Reg No: <b>12318510</b> | Name: <b>Yatharth Rai</b> | Section: <b>K23GW</b> | Roll No: <b>34</b><br>
+            Reg No: <b>12308707</b> | Name: <b>Ritik Kumar</b> | Section: <b>K23GW</b> | Roll No: <b>32</b>
+        </div>
+        """)
+        chatbot = gr.Chatbot(
+            type="messages",
+            value=[{"role": "assistant", "content": "👋 Welcome to the AI Shopping Assistant! What are you looking for today?"}],
+            elem_id="chatbot-container"
+        )
+        with gr.Column(elem_id="chatbot-input-area"):
+            text_input = gr.Textbox(
+                label="Ask a question",
+                placeholder="e.g. Suggest a good gaming laptop under $1000",
+                elem_id="chatbot-input",
+            )
+            submit_btn = gr.Button("Send", elem_id="chatbot-send-button")
+
+        restart_btn = gr.Button("Restart Chat", elem_id="restart-button")
+
+        text_input.submit(ai_shopping_assistant, [chatbot, text_input, state, genai_model], [chatbot, text_input, state])
+        submit_btn.click(ai_shopping_assistant, [chatbot, text_input, state, genai_model], [chatbot, text_input, state])
+        restart_btn.click(restart_chatbot, [], [chatbot, state])
+
+if __name__ == "__main__":
+    iface.launch(share=True)
